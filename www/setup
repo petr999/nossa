@@ -28,6 +28,7 @@ my $sess_vars = $session->param('vars');
 if( $session->param( 'login' ) ){
 	if( $action eq 'logout' ){
 		$session->delete;
+		$session->flush;
 		&print_form;
 	#	} elsif( $action eq 'login' ){
 	#		print $session->header( -status => "301 Logged in successfully", -location => "/id?$check_qs", );
