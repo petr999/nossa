@@ -3,6 +3,8 @@ package Net::OpenID::Server::Standalone::Config;
 use strict;
 use warnings;
 
+our $config;
+
 =pod
   my $config = {
     users => {
@@ -37,8 +39,10 @@ use warnings;
 ###  No user-serviceable part below this line ###
 
 sub get{
-  shift if ( $_[0] eq __PACKAGE__ ) or defined ref $_[0] ;
-  my $rv = $config;
+  my $pkg = shift if ( $_[0] eq __PACKAGE__ ) or defined ref $_[0] ;
+	no strict 'refs';
+  my $rv = ${ *{ $pkg. '::' }->{ config } };
+	use strict 'refs';
   if( @_ > 0 ){
     while( $_ = shift @_ ){
       if( defined $rv->{ $_ } ){
