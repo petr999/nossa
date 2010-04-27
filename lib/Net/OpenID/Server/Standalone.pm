@@ -23,7 +23,7 @@ setup script use this:
   Net::OpenID::Server::Standalone::setup;
 
 Some kind of L<Net::OpenID::Server::Standalone::Config> is a must. For more sophisticated use see L</USAGE> below.
-     
+
 =head1 DESCRIPTION
 
 Nossa is dedicated for fast installation of your own OpenID 'Server' on a CGI/L<FCGI::Spawn> - enabled hosting. There is a lot of tweaks for common needs known as: your own identity source to be pluggable with Config.pm, your own design for user setup pages, location of your CGI::Session storage, your SRE information, redirect to your HTTPS server for setup, etc.
