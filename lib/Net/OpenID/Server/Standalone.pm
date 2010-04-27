@@ -421,6 +421,57 @@ sub callHashFunction {
 
 =back
 
+=head1 USAGE
+
+For 'do it quick' see the examples: index.html, id and setup. Also, L<Net::OpenID::Server::Standalone::Config> is an example about how you could set up your own Config. You should do it in any case.
+
+For more custom-made setup you can inherit Nossa like this:
+
+  $ cat lib/MyApp/Nossa.pm
+  package MyApp::Nossa;
+  
+  use strict;
+  use warnings;
+  
+  # inheritance stuff
+  use base qw/Net::OpenID::Server::Standalone/;
+  
+  # your own hash function initialization
+  use Digest::SHA256;
+  my $dig = Digest::SHA256::new( 512 );
+  
+  # your own stylings around forms; override the print*Form methods for even more and/or inner styling
+  our $htmlStyle = { start => "<html><body height='100%'><table width='100%' height='100%'"
+                             ."><tr><td height='100%' align='center' valign='middle'"
+                             .">'",
+                     end => "</td></tr>"
+                           ."</table></form></td></tr></table></body></html>",
+  };
+  
+  # the hash function
+  sub hashFunction{
+    my $pass = shift;
+    $dig->hexhash( $pass );
+  }
+
+  1;
+
+  $ cat lib/MyApp/Nossa/Config.pm
+  package MyApp::Nossa::Config;
+
+  use strict;
+  use warnings;
+  
+  use base qw/Net::OpenID::Server::Standalone::Config/;
+  
+  our $config = {
+    # set up your values here as described in L<Net::OpenID::Server::Standalone::Config>
+  };
+
+  1;
+
+for different storage methods, you may want to set up your own get() in your Config package. You shouldn't need to use base N:O:S:Sa::Config in such a case.
+
 =cut
 
 1;
