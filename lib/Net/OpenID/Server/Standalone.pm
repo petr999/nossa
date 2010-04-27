@@ -22,20 +22,21 @@ setup script use this:
 
   Net::OpenID::Server::Standalone::setup;
 
-For more sophisticated use see below.
+Some kind of L<Net::OpenID::Server::Standalone::Config> is a must. For more sophisticated use see L</USAGE> below.
      
 =head1 DESCRIPTION
 
 Nossa is dedicated for fast installation of your own OpenID 'Server' on a CGI/L<FCGI::Spawn> - enabled hosting. There is a lot of tweaks for common needs known as: your own identity source to be pluggable with Config.pm, your own design for user setup pages, location of your CGI::Session storage, your SRE information, redirect to your HTTPS server for setup, etc.
 
 Typical layout follows:
+
   ./ --- application root, e. g. $HOME on your hosting.
     lib/Net/OpenID/Server/Standalone/
       Config.pm --- configuration of your OpenID server,
                     created from sample Config.pm
     www/ or public_html/
       index.html or whatever to be your XRD document like it is at 
-      L<http://peter.vereshagin.org>.
+      http://peter.vereshagin.org.
     cgi/ or perl/ or cgi-bin/ or www/
       id.cgi    or id.pl    or id    --- id script
       setup.cgi or setup.pl or setup --- setup script
@@ -46,7 +47,7 @@ You may use your own MyApp.pm and MyApp/Config.pm ( see below ).
 
 =head1 PREREQUISITES
 
-Net::OpenID::Server, Data::UUID, MIME::Base64; HTML::Entities; Digest::MD5, CGI, CGI::Session.
+Net::OpenID::Server, Data::UUID, MIME::Base64, HTML::Entities, Digest::MD5, CGI, CGI::Session.
 
 =cut
 
@@ -73,7 +74,7 @@ my( $cgi, $session, );
 
 =over
 
-=item * $htmlStyle
+=item * C<$htmlStyle>
 
 hash reference for HTML code for your setup pages: the 'start' key holds a value for start of the page, and the 'end' key holds a value for trhe end.
 
@@ -175,7 +176,7 @@ sub id {
 
 =pod
 
-=item * setup
+=item * setup()
 
 shows forms for login, logout and for trust the requesting URL. For use in the 'setup' script.
 
@@ -423,7 +424,7 @@ sub callHashFunction {
 
 =head1 USAGE
 
-For 'do it quick' see the examples: index.html, id and setup. Also, L<Net::OpenID::Server::Standalone::Config> is an example about how you could set up your own Config. You should do it in any case.
+For 'do it quick' see the examples: index.html, id and setup. Also, L<Net::OpenID::Server::Standalone::Config> is an example about how you could set up your own ::Config. You should do it in any case.
 
 For more custom-made setup you can inherit Nossa like this:
 
@@ -470,7 +471,42 @@ For more custom-made setup you can inherit Nossa like this:
 
   1;
 
-for different storage methods, you may want to set up your own get() in your Config package. You shouldn't need to use base N:O:S:Sa::Config in such a case.
+for different storage methods, you may want to set up your own get() in your Config package. You shouldn't need to 'use base N:O:S:Sa::Config' in such a case.
+
+  $ cat id
+  #!/usr/bin/perl
+  
+  use warnings;
+  use strict;
+  our $nossaLibDir;
+  
+  BEGIN{
+    use File::Basename qw/dirname/;
+    use Cwd qw/realpath/;
+    $nossaLibDir = realpath( dirname( __FILE__ ).'/../lib' );
+    push( @INC, $nossaLibDir  )
+      unless grep { $_ eq $nossaLibDir } @INC;
+  }
+  
+  use MyApp::Nossa;
+  
+  MyApp::Nossa->id;
+
+Same goes here for setup script except 
+
+  MyApp::Nossa->setup;
+
+is the last line.
+
+=head1 AUTHOR, LICENSE
+
+Peter Vereshagin <peter@vereshagin.org>, L<http://vereshagin.org>.
+Based on stuff from:
+
+  # Author: Alex Efros <powerman-asdf@yandex.ru>, 2008
+  # License: Public Domain
+
+License: consider BSD is the closest to be of that domain.
 
 =cut
 
