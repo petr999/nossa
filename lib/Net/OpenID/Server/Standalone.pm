@@ -55,7 +55,7 @@ my $configPackage;
 
 my( $cgi, $session, );
 
-my $htmlStyle = { start => '<html>', end => '</html>', };
+our $htmlStyle = { start => '<html>', end => '</html>', };
 
 *_push_url_arg = \&Net::OpenID::Server::_push_url_arg;
 *_eurl = \&Net::OpenID::Server::_eurl;
@@ -63,6 +63,9 @@ my $htmlStyle = { start => '<html>', end => '</html>', };
 
 sub new  {
   my $pkg = shift;
+  no strict 'refs';
+  $htmlStyle = ${ *{ $pkg.'::' }->{ htmlStyle } };
+  use strict 'refs';
   $configPackage = $pkg."::Config";
   eval( "use $configPackage;" );
   length( $@ ) and Carp::croak "No $configPackage! (please create it from Config.pm.sample): $@";
@@ -311,11 +314,11 @@ EOF
 }
 
 sub callHashFunction {
-	my( $self, $pass ) = @_;
-	no strict 'refs';
-	my $rv = *{ ref( $self ). '::' }->{ hashFunction }->( $pass );
-	use strict 'refs';
-	return $rv;
+  my( $self, $pass ) = @_;
+  no strict 'refs';
+  my $rv = *{ ref( $self ). '::' }->{ hashFunction }->( $pass );
+  use strict 'refs';
+  return $rv;
 }
 
 1;
