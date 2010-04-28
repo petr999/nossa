@@ -311,7 +311,11 @@ EOF
 }
 
 sub callHashFunction {
-  &hashFunction( $_[1] );
+	my( $self, $pass ) = @_;
+	no strict 'refs';
+	my $rv = *{ ref( $self ). '::' }->{ hashFunction }->( $pass );
+	use strict 'refs';
+	return $rv;
 }
 
 1;
