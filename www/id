@@ -1,20 +1,6 @@
 #!/usr/bin/perl
 # Author: Alex Efros <powerman-asdf@yandex.ru>, 2008
 # License: Public Domain
-# 
-# Personal OpenID server with SRE support.
-# 
-# Installation:
-# 1. Setup %USER, $SETUP_URL and $SERVER_SECRET below.
-# 2. Add this to .htaccess:
-#   <Files "OpenIDsrv.cgi">
-#       RewriteEngine On
-#       RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization},L]
-#   </Files>
-# 3. Add this to web page which will be your OpenID:
-#   <link rel="openid.server" href="http://YOUR.DOMAIN/PATH/OpenIDsrv.cgi" />
-#   <link rel="openid.delegate" href="http://YOUR.DOMAIN/OPENID_PATH" />
-
 
 use warnings;
 use strict;

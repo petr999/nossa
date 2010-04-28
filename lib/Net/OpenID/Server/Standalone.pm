@@ -21,18 +21,22 @@ id script use this:
 setup script use this:
 
   Net::OpenID::Server::Standalone::setup;
+
+For more sophisticated use see below.
      
 =head1 DESCRIPTION
 
 Typical layout follows:
-	./ --- application root, e. g. $HOME on your hosting.
+  ./ --- application root, e. g. $HOME on your hosting.
     lib/Net/OpenID/Server/Standalone/
-			Config.pm --- configuration of your OpenID server,
-										created from Config.pm.sample
+      Config.pm --- configuration of your OpenID server,
+                    created from Config.pm.sample
     www/ or public_html/
-		cgi/ or perl/ or cgi-bin/ or www/
-			id.cgi    or id.pl	  --- id script
-			setup.cgi or setup.pl --- setup script
+      index.html or whatever to be your XRD document like it is at 
+      L<http://peter.vereshagin.org>.
+    cgi/ or perl/ or cgi-bin/ or www/
+      id.cgi    or id.pl    or id    --- id script
+      setup.cgi or setup.pl or setup --- setup script
 
 =cut
 
@@ -55,12 +59,13 @@ my $htmlStyle = { start => '<html>', end => '</html>', };
 
 *_push_url_arg = \&Net::OpenID::Server::_push_url_arg;
 *_eurl = \&Net::OpenID::Server::_eurl;
+*hashFunction =\&md5_base64;
 
 sub new  {
-	my $pkg = shift;
-	$configPackage = $pkg."::Config";
-	eval( "use $configPackage;" );
-	length( $@ ) and Carp::croak "No $configPackage! (please create it from Config.pm.sample): $@";
+  my $pkg = shift;
+  $configPackage = $pkg."::Config";
+  eval( "use $configPackage;" );
+  length( $@ ) and Carp::croak "No $configPackage! (please create it from Config.pm.sample): $@";
   $cgi = new CGI; $cgi->charset( 'utf-8' );
   my $rnd = encode_base64( Data::UUID->new->create() ); chomp $rnd;
   my $setupUrl = $configPackage->get( 'setupUrl' );
@@ -178,13 +183,13 @@ sub isRedirectedToSsl{
 }
 
 sub getUser {
-	my $self = shift;
+  my $self = shift;
   my $authorized = 0;
   my ($login, $pass) = getAuth();
   my $users = $configPackage->get( 'users' );
   if ( defined( $login ) and defined $users->{$login}) {
     my $user = $users->{$login};
-    if( defined( $pass ) and ( $user->{pass} eq $self->hashFunction( $pass ) ) ) {
+    if( defined( $pass ) and ( $user->{pass} eq $self->callHashFunction( $pass ) ) ) {
       $session->param( login => $login );
       $session->flush;
       $authorized = 1;
@@ -304,6 +309,9 @@ $htmlStyle->{ start }<form action='$setupUrl' method='POST'
 /></form>$htmlStyle->{ end }
 EOF
 }
-sub hashFunction{ &md5_base64 $_[ 1 ] );
+
+sub callHashFunction {
+  &hashFunction( $_[1] );
+}
 
 1;
