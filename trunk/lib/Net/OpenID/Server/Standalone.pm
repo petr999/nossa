@@ -7,6 +7,7 @@ use Net::OpenID::Server;
 use Data::UUID;
 use MIME::Base64 qw/encode_base64/;
 use HTML::Entities qw/encode_entities/;
+use Digest::MD5 qw/md5_base64/;
 
 my $configPackage = __PACKAGE__."::Config";
 eval( "use $configPackage;" );
@@ -15,11 +16,13 @@ length( $@ ) and Carp::croak "No $configPackage! (please create it from Config.p
 my( $cgi, $session );
 
 *_push_url_arg = \&Net::OpenID::Server::_push_url_arg;
+*_eurl = \&Net::OpenID::Server::_eurl;
 
 sub id {
   my $self = __PACKAGE__->new;
   my $requireSsl = $configPackage->get( 'requireSsl' );
   unless( $requireSsl and isRedirectedToSsl() ){
+    my $setupUrl = $self->{ setupUrl };
     my $nos = Net::OpenID::Server->new(
       get_args      => $cgi,
       post_args     => $cgi,
@@ -27,22 +30,29 @@ sub id {
       is_identity   => \&isIdentity,
       is_trusted    => \&isTrusted,
       server_secret => $configPackage->get( 'serverSecret' ),
-      setup_url     => $self->{ setupUrl },
+      setup_url     => $setupUrl ,
       compat         => 1,
     );
     my ($type, $data) = $nos->handle_page();
     my $redirect = [ '200', $data, -type => $type, ];
     if( $type eq 'redirect' ){
       my $user = $nos->get_user()->();
-      my $url = $data;
+      #my $url = $data;
+      my $url = {
+        identity            => $nos->args('openid.identity'),
+        return_to           => $nos->args('openid.return_to'),
+        assoc_handle        => $nos->args('openid.assoc_handle'),
+        trust_root          => $nos->args('openid.trust_root'),
+      };
       my $sre = $configPackage->get( 'users', $user, 'sre', );
       if( defined( $sre ) and 'HASH' eq ref $sre ){
-        $url = _push_url_arg( $url, %$sre, );
+        $url->{ additional_fields }  = $sre;
       }
+      $url = $nos->signed_return_url( %$url );
       $redirect = [ '301 Identity Provided', $url, ];
     } elsif( $type eq 'setup' ){
-      my $url = $nos->setup_url();
-      $url = _push_url_arg( $url, %$data, );
+      my $url = $setupUrl;
+      _push_url_arg( \$url, %$data, );
       $redirect = [ '301 Setup Required', $url, ];
     }
      redirect( @$redirect );
@@ -51,34 +61,33 @@ sub id {
 sub new  {
   $cgi = new CGI; $cgi->charset( 'utf-8' );
   my $rnd = encode_base64( Data::UUID->new->create() ); chomp $rnd;
-  my $setupUrl = _push_url_arg(
-    $configPackage->get( 'setupUrl' ), 'rnd' => $rnd,
-  );
-  my $idSvrUrl = _push_url_arg(
-    $configPackage->get( 'idSvrUrl' ), 'rnd' => $rnd,
-  );
+  my $setupUrl = $configPackage->get( 'setupUrl' );
+  _push_url_arg( \$setupUrl , 'rnd' => $rnd, );
   my $session_href = $configPackage->get( 'session' );
   my( $session_name, $session_dsn, $session_expire ) = map{ $session_href->{ $_ } } qw/name dsn expire/;
   CGI::Session->name( $session_name );
   $session = new CGI::Session( $session_dsn, undef ) or die CGI::Session->errstr;
   $session->expire( $session_expire );
   bless {  
+    rnd => $rnd,
     setupUrl => $setupUrl,
-    idSvrUrl => $idSvrUrl,
   }, __PACKAGE__ ;
 }
 
 sub setup {
   my $self = __PACKAGE__->new;
+  my $idSvrUrl = $configPackage->get( 'idSvrUrl' );
+  _push_url_arg( \$idSvrUrl , 'rnd' => $self->{ rnd }, );
+  $self->{ idSvrUrl } = $idSvrUrl;
   my $action = $cgi->param( 'action' );
-  print $cgi->header;
+  print $session->header;
   if( $session->param( 'login' ) ){
-    if( $action eq 'logout' ){
+    if( defined( $action ) and $action eq 'logout' ){
       $session->delete;
       $session->flush;
       $self->printLoginForm;
     } elsif( defined( $cgi->param( 'trust_root' ) ) and length $cgi->param( 'trust_root' ) ){
-      my $trustRoot = $cgi->param( 'openid.trust_root' );
+      my $trustRoot = $cgi->param( 'trust_root' );
       $self->printTrustForm( encode_entities( $trustRoot ) );
     } else {
       $self->printLogoutForm;
@@ -91,7 +100,11 @@ sub setup {
 sub redirect {
   my( $status, $location, ) = ( shift, shift, );
   print $session->header( -status => $status, -location => $location, @_ );
-  print redirectMessage();
+  if( substr( $status, 0, 3 ) eq '200' ){
+    print $location;
+  } else {
+    print redirectMessage( $status, $location, );
+  }
 }
 sub redirectMessage {
   my( $status, $location, ) = @_;
@@ -106,8 +119,6 @@ EOF
 }
 
 sub isRedirectedToSsl{
-  my $self = shift;
-  my $cgi = $self->{ cgi };
   my $mode = $cgi->param( 'openid.mode' );
   if( 
       (
@@ -158,8 +169,14 @@ sub getAuth {
 }
 sub requireAuth {
   my $params = $cgi->Vars;
-  map{ delete( $params->{ $_ } ) if defined $params->{ $_ } } qw/login password action setup_trust_root/;
-  print redirect( "301 Login please", $configPackage->get( 'setupUrl' ), );
+  # map{ delete( $params->{ $_ } ) if defined $params->{ $_ } } qw/login password action setup_trust_root/;
+  $params = {
+    map{ substr( $_, 7, length( $_ ) -7 ) => $cgi->param( $_ )  }
+      grep /^openid\./, $cgi->param
+  };
+  my $setupUrl = $configPackage->get( 'setupUrl' );
+  _push_url_arg( \$setupUrl, %$params );
+  print &redirect( "301 Login please", $setupUrl, );
   return undef;
 }
 
@@ -193,11 +210,11 @@ sub isTrusted {
 }
 sub printLoginForm {
   my $self = shift;
-  my $idSrvUrl = $self->{ idSrvUrl };
+  my $idSvrUrl = $self->{ idSvrUrl };
   my $hiddens = &cgiHiddens;
   print <<EOF;
-<html><form action='$idSrvUrl' method='POST'
->$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
+<html><form action='$idSvrUrl' method='POST'
+>$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
 <tr>
 <td>Login: </td><td><input type='text' name='login' /></td>
 </tr><tr>
@@ -212,20 +229,21 @@ sub cgiHiddens {
       encode_entities( $_, '<>&"\'' ) => encode_entities( $cgi->param( $_ ), '<>&"\'' )
   } $cgi->param };
   $cgi_htmled->{ mode } = 'checkid_setup';
-  return join "\n",
+  $cgi_htmled =  join "\n",
     map {
       my $val = $cgi_htmled->{ $_ };
       "<input type='hidden' name='openid.$_' value='$val' />";
     } keys  %$cgi_htmled  ;
+  return  \$cgi_htmled;
 }
 sub printTrustForm {
   my $self = shift;
   my $trustRootHtmled = shift;
-  my $idSrvUrl = $self->{ idSrvUrl };
+  my $idSvrUrl = $self->{ idSvrUrl };
   my $hiddens = &cgiHiddens;
   print <<EOF;
-<html><form action='$idSrvUrl' method='POST'
->$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
+<html><form action='$idSvrUrl' method='POST'
+>$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
 <tr>
 <tr><td colspan='2' align='center'>Trust this root?<br /><b>$trustRootHtmled</b></td></tr>
 <tr><td align='center'><input type='submit' name='setup_trust_root' value='Yes' /></td><td align='center'><input type='submit' name='setup_trust_root' value='No' /></td>
