@@ -1,0 +1,179 @@
+#!/usr/bin/perl
+# Author: Alex Efros <powerman-asdf@yandex.ru>, 2008
+# License: Public Domain
+# 
+# Personal OpenID server with SRE support.
+# 
+# Installation:
+# 1. Setup %USER, $SETUP_URL and $SERVER_SECRET below.
+# 2. Add this to .htaccess:
+#   <Files "OpenIDsrv.cgi">
+#       RewriteEngine On
+#       RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization},L]
+#   </Files>
+# 3. Add this to web page which will be your OpenID:
+#   <link rel="openid.server" href="http://YOUR.DOMAIN/PATH/OpenIDsrv.cgi" />
+#   <link rel="openid.delegate" href="http://YOUR.DOMAIN/OPENID_PATH" />
+
+
+use version; $VERSION = qv('0.1.0');
+use warnings;
+use strict;
+use CGI;
+use MIME::Base64;
+use Net::OpenID::Server;
+
+use Digest::MD5 qw/md5_base64/;
+use CGI::Session;
+
+use File::Basename qw/dirname/;
+use Cwd qw/realpath/;
+
+
+# Configuration: setup users, their passwords, OpenID urls, filter for
+# allowed RP (Relying Party), and additional data sent to RP.
+
+our $SRVOPENID_CONFIG;
+require( realpath( dirname( __FILE__ ).'/../srvopenid.cfg.pl' ) );
+
+my ( $SETUP_URL, $SERVER_SECRET, $USER ) = map{ $SRVOPENID_CONFIG->{ $_ } } qw/SETUP_URL SERVER_SECRET USER/ ;
+
+
+my $cgi = new CGI; $cgi->charset( 'utf-8' );
+CGI::Session->name( 'pvo' );
+my $session = new CGI::Session( "driver:DB_File;serializer:FreezeThaw", undef ) or die CGI::Session->errstr;
+$session->expire('+1h');
+my $nos = Net::OpenID::Server->new(
+    get_args      => $cgi,
+    post_args     => $cgi,
+    get_user      => \&get_user,
+    is_identity   => \&is_identity,
+    is_trusted    => \&is_trusted,
+    server_secret => $SERVER_SECRET,
+    setup_url     => $SETUP_URL,
+);
+&checkid_setup_redirect;
+my ($type, $data) = $nos->handle_page();
+if ($type eq 'redirect') {
+    my $user = $nos->get_user()->();
+    my $url = $nos->signed_return_url(
+        identity            => $nos->args('openid.identity'),
+        return_to           => $nos->args('openid.return_to'),
+        assoc_handle        => $nos->args('openid.assoc_handle'),
+        trust_root          => $nos->args('openid.trust_root'),
+        additional_fields   => $USER->{$user}{sre},
+    );
+    print "Status: 301\r\n";
+    print "Location: $url\r\n\r\n";
+}
+elsif ($type eq 'setup') {
+    my $url = $nos->setup_url();
+    print "Status: 301\r\n";
+    print "Location: $url\r\n\r\n";
+}
+else {
+    print "Status: 200\r\n";
+    print "Content-Type: $type\r\n\r\n$data";
+}
+exit;
+
+
+# Return name of logged in user or undef if user isn't logged in.
+sub get_user {
+		my $authorized = 0;
+    my ($login, $pass) = _get_auth();
+    if ( defined( $login ) and defined $USER->{$login}) {
+			if( defined( $pass ) and ( $USER->{$login}{pass} eq md5_base64 $pass ) ) {
+				$session->param( login => $login );
+				$session->flush;
+				$authorized = 1;
+			}
+		} elsif( defined( $session->param( "login" ) ) and length $session->param( "login" ) ){
+			$login = $session->param( "login" );
+			$authorized = 1;
+		}
+		if( $authorized ) {
+			return $login;
+		} else {
+      _require_auth();
+    }
+}
+
+# Return true if $user own $url.
+# $url usually come from <link rel="openid.delegate" href="...">
+sub is_identity {
+    my ($user, $url) = @_;
+    return if !defined $user;
+    return $USER->{$user}{url} eq $url;
+}
+
+# Returning true if the logged in $user trusts the URL given by $trust_root
+# to know his identity.
+# $trust_root is url of RP (website which is checking user's OpenID)
+sub is_trusted {
+    my ($user, $trust_root, $is_identity) = @_;
+		my $trusted = 0; my $setup_trust_root = $cgi->param( 'setup_trust_root' );
+    if( defined( $user ) and defined( $is_identity ) and $is_identity ){
+			if( defined( $setup_trust_root ) and $setup_trust_root eq 'Yes' ){
+				$trusted = 1;
+			} else {
+    		$trusted = $trust_root =~ m/$USER->{$user}{trust_root}/;
+			}
+			if(	defined( $setup_trust_root ) and length $setup_trust_root ){
+				$session->clear( [ 'vars' ] ); $session->flush;
+				unless(	$trusted ){
+						print $session->header( -status => "301 Not Trusted", -location => $trust_root, );
+						exit;
+				}
+			}
+			unless( $trusted ){
+				unless(	defined( $setup_trust_root ) ){
+					my $params = $cgi->Vars;
+					map{ delete( $params->{ $_ } ) if defined $params->{ $_ } } qw/login password action setup_trust_root/;
+					$session->param( 'vars', $params ) or die CGI::Session->errstr; $session->flush or die CGI::Session->errstr;
+				}
+			}
+		}
+		return $trusted;
+}
+
+
+
+sub _get_auth {
+		my( $login, $password ) = map{ defined( $cgi->param( $_ ) ) ? $cgi->param( $_ ) : ''; 
+		} qw/login password/;
+		if( defined( $login ) and length( $login )
+						and defined( $password ) and length( $password )
+			){
+			return $login, $password;
+		} else {
+			return;
+		}
+}
+
+sub _require_auth {
+		my $params = $cgi->Vars;
+		map{ delete( $params->{ $_ } ) if defined $params->{ $_ } } qw/login password action setup_trust_root/;
+		$session->param( 'vars', $params ) or die CGI::Session->errstr; $session->flush or die CGI::Session->errstr;
+		print $session->header( -status => "301 Login please", -location => $SETUP_URL, );
+    exit;
+}
+
+sub checkid_setup_redirect{
+	my $mode = $cgi->param( 'openid.mode' );
+	if( 
+			(
+				( $mode eq 'checkid_setup' )
+				or
+				( $mode eq 'checkid_immediate' )
+			)
+			and
+			(	$ENV{ SERVER_PORT } != 443 )
+		){
+		my $url = 'https://'.$ENV{ HTTP_HOST };
+		$url .= $ENV{ REQUEST_URI };
+		print $cgi->header( -status => "301 SSL please", -location => $url, );
+		exit;
+	}
+}
+
