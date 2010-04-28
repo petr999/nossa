@@ -357,7 +357,7 @@ prints login form for setup script;
 sub printLoginForm {
   my $self = shift;
   my $idSvrUrl = $self->{ idSvrUrl };
-  my $hiddens = &cgiHiddens;
+  my $hiddens = $self->cgiHiddens;
   print <<EOF;
 $htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 >$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
@@ -381,7 +381,7 @@ sub printTrustForm {
   my $self = shift;
   my $trustRootHtmled = shift;
   my $idSvrUrl = $self->{ idSvrUrl };
-  my $hiddens = &cgiHiddens;
+  my $hiddens = $self->cgiHiddens;
   print <<EOF;
 $htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 >$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
