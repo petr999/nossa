@@ -26,8 +26,14 @@ use Net::OpenID::Server;
 use Digest::MD5 qw/md5_base64/;
 use CGI::Session;
 
-use File::Basename qw/dirname/;
-use Cwd qw/realpath/;
+BEGIN{
+	use File::Basename qw/dirname/;
+	use Cwd qw/realpath/;
+	push @INC, realpath( dirname( __FILE__ ).'/../lib' );
+}
+
+use Net::OpenID::Server::Standalone;
+
 
 
 # Configuration: setup users, their passwords, OpenID urls, filter for
