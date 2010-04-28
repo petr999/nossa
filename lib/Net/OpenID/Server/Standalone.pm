@@ -1,5 +1,41 @@
 package Net::OpenID::Server::Standalone;
 
+use vars qw($VERSION);
+BEGIN {
+  $VERSION = '0.1.1';
+  $Net::OpenID::Server::Standalone::Default = 'Net::OpenID::Server::Standalone';
+}
+
+=pod
+
+=head1 NAME
+
+  Net::OpenID::Server::Standalone - personal standalone OpenID server ready-to-use out-of-the-box
+
+=head1 SYNOPSIS
+
+id script use this:
+
+  Net::OpenID::Server::Standalone::id;
+
+setup script use this:
+
+  Net::OpenID::Server::Standalone::setup;
+     
+=head1 DESCRIPTION
+
+Typical layout follows:
+	./ --- application root, e. g. $HOME on your hosting.
+    lib/Net/OpenID/Server/Standalone/
+			Config.pm --- configuration of your OpenID server,
+										created from Config.pm.sample
+    www/ or public_html/
+		cgi/ or perl/ or cgi-bin/ or www/
+			id.cgi    or id.pl	  --- id script
+			setup.cgi or setup.pl --- setup script
+
+=cut
+
 use strict;
 use warnings;
 
@@ -8,25 +44,46 @@ use Data::UUID;
 use MIME::Base64 qw/encode_base64/;
 use HTML::Entities qw/encode_entities/;
 use Digest::MD5 qw/md5_base64/;
+use CGI;
+use CGI::Session;
 
-my $configPackage = __PACKAGE__."::Config";
-eval( "use $configPackage;" );
-length( $@ ) and Carp::croak "No $configPackage! (please create it from Config.pm.sample): $@";
+my $configPackage;
 
-my( $cgi, $session );
+my( $cgi, $session, );
+
+my $htmlStyle = { start => '<html>', end => '</html>', };
 
 *_push_url_arg = \&Net::OpenID::Server::_push_url_arg;
 *_eurl = \&Net::OpenID::Server::_eurl;
 
+sub new  {
+	my $pkg = shift;
+	$configPackage = $pkg."::Config";
+	eval( "use $configPackage;" );
+	length( $@ ) and Carp::croak "No $configPackage! (please create it from Config.pm.sample): $@";
+  $cgi = new CGI; $cgi->charset( 'utf-8' );
+  my $rnd = encode_base64( Data::UUID->new->create() ); chomp $rnd;
+  my $setupUrl = $configPackage->get( 'setupUrl' );
+  _push_url_arg( \$setupUrl , 'rnd' => $rnd, );
+  my $session_href = $configPackage->get( 'session' );
+  my( $session_name, $session_dsn, $session_expire ) = map{ $session_href->{ $_ } } qw/name dsn expire/;
+  CGI::Session->name( $session_name );
+  $session = new CGI::Session( $session_dsn, undef ) or die CGI::Session->errstr;
+  $session->expire( $session_expire );
+  bless {  
+    rnd => $rnd,
+    setupUrl => $setupUrl,
+  }, $pkg ;
+}
 sub id {
-  my $self = __PACKAGE__->new;
+  my $self = ( @_ ? shift : __PACKAGE__ )->new ;
   my $requireSsl = $configPackage->get( 'requireSsl' );
   unless( $requireSsl and isRedirectedToSsl() ){
     my $setupUrl = $self->{ setupUrl };
     my $nos = Net::OpenID::Server->new(
       get_args      => $cgi,
       post_args     => $cgi,
-      get_user      => \&getUser,
+      get_user      => sub{ $self->getUser( @_ ) },
       is_identity   => \&isIdentity,
       is_trusted    => \&isTrusted,
       server_secret => $configPackage->get( 'serverSecret' ),
@@ -58,24 +115,9 @@ sub id {
      redirect( @$redirect );
   }
 }
-sub new  {
-  $cgi = new CGI; $cgi->charset( 'utf-8' );
-  my $rnd = encode_base64( Data::UUID->new->create() ); chomp $rnd;
-  my $setupUrl = $configPackage->get( 'setupUrl' );
-  _push_url_arg( \$setupUrl , 'rnd' => $rnd, );
-  my $session_href = $configPackage->get( 'session' );
-  my( $session_name, $session_dsn, $session_expire ) = map{ $session_href->{ $_ } } qw/name dsn expire/;
-  CGI::Session->name( $session_name );
-  $session = new CGI::Session( $session_dsn, undef ) or die CGI::Session->errstr;
-  $session->expire( $session_expire );
-  bless {  
-    rnd => $rnd,
-    setupUrl => $setupUrl,
-  }, __PACKAGE__ ;
-}
 
 sub setup {
-  my $self = __PACKAGE__->new;
+  my $self = ( @_ ? shift : __PACKAGE__ )->new ;
   my $idSvrUrl = $configPackage->get( 'idSvrUrl' );
   _push_url_arg( \$idSvrUrl , 'rnd' => $self->{ rnd }, );
   $self->{ idSvrUrl } = $idSvrUrl;
@@ -109,12 +151,12 @@ sub redirect {
 sub redirectMessage {
   my( $status, $location, ) = @_;
   return <<EOF;
-<html><h1
+$htmlStyle->{start}<h1
 >$status</h1
 ><p
 >The document is moved <a href='$location'>here.</a
 ></p><hr
-/>nossa &mdash; Net::OpenID::Server::Standalone.</html>
+/>nossa &mdash; Net::OpenID::Server::Standalone.$htmlStyle->{ end }
 EOF
 }
 
@@ -136,12 +178,13 @@ sub isRedirectedToSsl{
 }
 
 sub getUser {
+	my $self = shift;
   my $authorized = 0;
   my ($login, $pass) = getAuth();
   my $users = $configPackage->get( 'users' );
   if ( defined( $login ) and defined $users->{$login}) {
     my $user = $users->{$login};
-    if( defined( $pass ) and ( $user->{pass} eq md5_base64 $pass ) ) {
+    if( defined( $pass ) and ( $user->{pass} eq $self->hashFunction( $pass ) ) ) {
       $session->param( login => $login );
       $session->flush;
       $authorized = 1;
@@ -208,22 +251,6 @@ sub isTrusted {
   }
   return $trusted;
 }
-sub printLoginForm {
-  my $self = shift;
-  my $idSvrUrl = $self->{ idSvrUrl };
-  my $hiddens = &cgiHiddens;
-  print <<EOF;
-<html><form action='$idSvrUrl' method='POST'
->$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
-<tr>
-<td>Login: </td><td><input type='text' name='login' /></td>
-</tr><tr>
-<td>Pzzwd: </td><td><input type='password' name='password' /></td>
-</tr>
-<tr><td colspan='2' align='center'><input type='submit' name='button' value='Go' /></td></tr>
-</table></form></html>
-EOF
-}
 sub cgiHiddens {
   my $cgi_htmled = { map{  
       encode_entities( $_, '<>&"\'' ) => encode_entities( $cgi->param( $_ ), '<>&"\'' )
@@ -236,30 +263,47 @@ sub cgiHiddens {
     } keys  %$cgi_htmled  ;
   return  \$cgi_htmled;
 }
+sub printLoginForm {
+  my $self = shift;
+  my $idSvrUrl = $self->{ idSvrUrl };
+  my $hiddens = &cgiHiddens;
+  print <<EOF;
+$htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
+>$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
+<tr>
+<td>Login: </td><td><input type='text' name='login' /></td>
+</tr><tr>
+<td>Pzzwd: </td><td><input type='password' name='password' /></td>
+</tr>
+<tr><td colspan='2' align='center'><input type='submit' name='button' value='Go' /></td></tr>
+</table></form>$htmlStyle->{ end }
+EOF
+}
 sub printTrustForm {
   my $self = shift;
   my $trustRootHtmled = shift;
   my $idSvrUrl = $self->{ idSvrUrl };
   my $hiddens = &cgiHiddens;
   print <<EOF;
-<html><form action='$idSvrUrl' method='POST'
+$htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 >$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
 <tr>
 <tr><td colspan='2' align='center'>Trust this root?<br /><b>$trustRootHtmled</b></td></tr>
 <tr><td align='center'><input type='submit' name='setup_trust_root' value='Yes' /></td><td align='center'><input type='submit' name='setup_trust_root' value='No' /></td>
 </tr>
-</table></form></html>
+</table></form>$htmlStyle->{ end }
 EOF
 }
 sub printLogoutForm {
   my $self = shift;
   my $setupUrl = $self->{ setupUrl };
   print <<EOF;
-<html><form action='$setupUrl' method='POST'
+$htmlStyle->{ start }<form action='$setupUrl' method='POST'
 ><input type='hidden' name='action' value='logout'
 /><input type='submit' name='button' value='Out' 
-/></form></html>
+/></form>$htmlStyle->{ end }
 EOF
 }
+sub hashFunction{ &md5_base64 $_[ 1 ] );
 
 1;
