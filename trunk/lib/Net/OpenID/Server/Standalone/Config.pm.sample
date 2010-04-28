@@ -11,7 +11,10 @@ my $config = {
     'the_your_nickname' => {
         pass        => 'md5_base64 of your password',
         url         => 'http://your.openid.url/',
-        trust_root  => qr/(blogger\.com|cpan\.org|ccmixter\.org|stickr\.com|mychores\.co\.uk\/openid|qdos\.com|demand-openid\.rpxnow\.com|livejournal\.com)\/?$/,
+        trust_root  => sub{
+														shift =~ m/(blogger\.com|cpan\.org|ccmixter\.org|stickr\.com|mychores\.co\.uk\/openid|qdos\.com
+																				|demand-openid\.rpxnow\.com|livejournal\.com|sourceforge\.net)\/?$/x;
+												},
         # http://openid.net/specs/openid-simple-registration-extension-1_0.html
         sre         => {
             'sreg.nickname'     => 'nickname_for_outside_world',
@@ -23,12 +26,18 @@ my $config = {
 # failed filter for RP:
 	setupUrl => '/setup?action=login&rnd='.encode_base64( Data::UUID->new->create() ),
 	serverSecret => 'some_random_sequence_put_your_own',
+	requireSsl=> 0,
+	session	=>	{
+		dsn	=>"driver:DB_File;serializer:FreezeThaw",
+		name	=> 'nossa_cookie',
+		expire	=> '+1h',
+	},
 };
 chomp $config->{ setupUrl };
 
 ###	No user-serviceable part below this line ###
 
-sub href{
+sub get{
 	my $rv = $config;
 	if( @_ > 0 ){
 		while( shift @_ ){
