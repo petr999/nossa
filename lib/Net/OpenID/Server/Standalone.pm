@@ -506,6 +506,29 @@ Same goes here for setup script except
 
 is the last line.
 
+=head1 Downloads and more info
+
+=head2 Web links
+
+L<http://gitweb.vereshagin.org/nossa> - browseable repository with snapshots
+
+L<http://code.google.com/p/nossa/> - home page with actual links, etc.
+
+L<http://github.com/petr999/nossa> - GitHub page
+
+L<http://bugs.vereshagin.org/buglist.cgi?product=Nossa> for bugs and reporting of them
+
+=head2 VCS downloads
+
+Git users use this:
+
+  git clone git://github.com/petr999/nossa
+
+Subversion users use one of these:
+
+  svn checkout http://nossa.googlecode.com/svn/trunk/ nossa-read-only
+  svn checkout http://svn.github.com/petr999/nossa.git
+
 =head1 AUTHOR, LICENSE
 
 Peter Vereshagin <peter@vereshagin.org>, L<http://vereshagin.org>.
