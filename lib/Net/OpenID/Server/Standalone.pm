@@ -26,17 +26,27 @@ For more sophisticated use see below.
      
 =head1 DESCRIPTION
 
+Nossa is dedicated for fast installation of your own OpenID 'Server' on a CGI/L<FCGI::Spawn> - enabled hosting. There is a lot of tweaks for common needs known as: your own identity source to be pluggable with Config.pm, your own design for user setup pages, location of your CGI::Session storage, your SRE information, redirect to your HTTPS server for setup, etc.
+
 Typical layout follows:
   ./ --- application root, e. g. $HOME on your hosting.
     lib/Net/OpenID/Server/Standalone/
       Config.pm --- configuration of your OpenID server,
-                    created from Config.pm.sample
+                    created from sample Config.pm
     www/ or public_html/
       index.html or whatever to be your XRD document like it is at 
       L<http://peter.vereshagin.org>.
     cgi/ or perl/ or cgi-bin/ or www/
       id.cgi    or id.pl    or id    --- id script
       setup.cgi or setup.pl or setup --- setup script
+
+Of course those mentioned last three can be on the different servers as different URLs. The workflow is as follows: id script checks user identity and setup shows forms. Target of those forms is an id script, too.
+
+You may use your own MyApp.pm and MyApp/Config.pm ( see below ).
+
+=head1 PREREQUISITES
+
+Net::OpenID::Server, Data::UUID, MIME::Base64; HTML::Entities; Digest::MD5, CGI, CGI::Session.
 
 =cut
 
@@ -55,11 +65,41 @@ my $configPackage;
 
 my( $cgi, $session, );
 
+
+=pod
+
+=head1 Variables and Subs
+
+
+=over
+
+=item * $htmlStyle
+
+hash reference for HTML code for your setup pages: the 'start' key holds a value for start of the page, and the 'end' key holds a value for trhe end.
+
+=cut
 our $htmlStyle = { start => '<html>', end => '</html>', };
 
 *_push_url_arg = \&Net::OpenID::Server::_push_url_arg;
 *_eurl = \&Net::OpenID::Server::_eurl;
+
+=pod
+
+=item * hashFunction()
+
+is a function that provides hash for your password storage. MD5 is the default.
+
+=cut
+
 *hashFunction =\&md5_base64;
+
+=pod
+
+=item * new()
+
+Object constructor, starts session and so on.
+
+=cut
 
 sub new  {
   my $pkg = shift;
@@ -83,17 +123,26 @@ sub new  {
     setupUrl => $setupUrl,
   }, $pkg ;
 }
+
+=pod
+
+=item * id()
+
+performs identification, should be pointed as an 'openid.delegate' URL in your XRD document ( located on your OpenID URL ).
+
+=cut
+
 sub id {
   my $self = ( @_ ? shift : __PACKAGE__ )->new ;
   my $requireSsl = $configPackage->get( 'requireSsl' );
-  unless( $requireSsl and isRedirectedToSsl() ){
+  unless( $requireSsl and $self->isRedirectedToSsl() ){
     my $setupUrl = $self->{ setupUrl };
     my $nos = Net::OpenID::Server->new(
       get_args      => $cgi,
       post_args     => $cgi,
       get_user      => sub{ $self->getUser( @_ ) },
       is_identity   => \&isIdentity,
-      is_trusted    => \&isTrusted,
+      is_trusted    => sub{ $self->isTrusted( @_ ) },
       server_secret => $configPackage->get( 'serverSecret' ),
       setup_url     => $setupUrl ,
       compat         => 1,
@@ -120,9 +169,17 @@ sub id {
       _push_url_arg( \$url, %$data, );
       $redirect = [ '301 Setup Required', $url, ];
     }
-     redirect( @$redirect );
+     $self->redirect( @$redirect );
   }
 }
+
+=pod
+
+=item * setup
+
+shows forms for login, logout and for trust the requesting URL. For use in the 'setup' script.
+
+=cut
 
 sub setup {
   my $self = ( @_ ? shift : __PACKAGE__ )->new ;
@@ -147,13 +204,22 @@ sub setup {
   }
 }
 
+=pod
+
+=item * redirect() and redirectMessage()
+
+overrideable for your inherited package needs. Use to take HTTP status and URL location as parameters.
+redirectMessage returns the message for user.
+
+=cut
+
 sub redirect {
-  my( $status, $location, ) = ( shift, shift, );
+  my( $self, $status, $location, ) = @_;
   print $session->header( -status => $status, -location => $location, @_ );
   if( substr( $status, 0, 3 ) eq '200' ){
     print $location;
   } else {
-    print redirectMessage( $status, $location, );
+    print $self->redirectMessage( $status, $location, );
   }
 }
 sub redirectMessage {
@@ -169,6 +235,7 @@ EOF
 }
 
 sub isRedirectedToSsl{
+  my $self = shift;
   my $mode = $cgi->param( 'openid.mode' );
   if( 
       (
@@ -181,7 +248,7 @@ sub isRedirectedToSsl{
     ){
     my $url = 'https://'.$ENV{ HTTP_HOST };
     $url .= $ENV{ REQUEST_URI };
-    redirect( "301 SSL please", $url, );
+    $self->redirect( "301 SSL please", $url, );
   }
 }
 
@@ -204,7 +271,7 @@ sub getUser {
   if( $authorized ) {
     return $login;
   } else {
-    requireAuth();
+    $self->requireAuth();
   }
 }
 sub getAuth {
@@ -219,6 +286,7 @@ sub getAuth {
   }
 }
 sub requireAuth {
+  my $self = shift;
   my $params = $cgi->Vars;
   # map{ delete( $params->{ $_ } ) if defined $params->{ $_ } } qw/login password action setup_trust_root/;
   $params = {
@@ -227,7 +295,7 @@ sub requireAuth {
   };
   my $setupUrl = $configPackage->get( 'setupUrl' );
   _push_url_arg( \$setupUrl, %$params );
-  print &redirect( "301 Login please", $setupUrl, );
+  print $self->redirect( "301 Login please", $setupUrl, );
   return undef;
 }
 
@@ -239,7 +307,7 @@ sub isIdentity {
 }
 
 sub isTrusted {
-  my ($user, $trustRoot, $isIdentity) = @_;
+  my ($self, $user, $trustRoot, $isIdentity) = @_;
   my $trusted = 0; my $setupTrustRoot = $cgi->param( 'setup_trust_root' );
   if( defined( $user ) and defined( $isIdentity ) and $isIdentity ){
     if( defined( $setupTrustRoot ) and $setupTrustRoot eq 'Yes' ){
@@ -252,13 +320,20 @@ sub isTrusted {
     }
     if(  defined( $setupTrustRoot ) and length $setupTrustRoot ){
       unless(  $trusted ){
-        redirect( "301 Not Trusted", $trustRoot, );
+        $self->redirect( "301 Not Trusted", $trustRoot, );
         exit;
       }
     }
   }
   return $trusted;
 }
+=pod
+
+=item * cgiHiddens()
+
+function that turns OpenID values for the default setup_map of the Net::OpenID::Server into the hidden inputs for the form on the setup URL.
+
+=cut
 sub cgiHiddens {
   my $cgi_htmled = { map{  
       encode_entities( $_, '<>&"\'' ) => encode_entities( $cgi->param( $_ ), '<>&"\'' )
@@ -271,6 +346,13 @@ sub cgiHiddens {
     } keys  %$cgi_htmled  ;
   return  \$cgi_htmled;
 }
+=pod
+
+=item * printLoginForm()
+
+prints login form for setup script;
+
+=cut
 sub printLoginForm {
   my $self = shift;
   my $idSvrUrl = $self->{ idSvrUrl };
@@ -287,6 +369,13 @@ $htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 </table></form>$htmlStyle->{ end }
 EOF
 }
+=pod
+
+=item * printLoginForm()
+
+prints 'trust this root' form for setup script;
+
+=cut
 sub printTrustForm {
   my $self = shift;
   my $trustRootHtmled = shift;
@@ -302,6 +391,13 @@ $htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 </table></form>$htmlStyle->{ end }
 EOF
 }
+=pod
+
+=item * printLoginForm()
+
+prints logout form for setup script;
+
+=cut
 sub printLogoutForm {
   my $self = shift;
   my $setupUrl = $self->{ setupUrl };
@@ -320,5 +416,11 @@ sub callHashFunction {
   use strict 'refs';
   return $rv;
 }
+
+=pod
+
+=back
+
+=cut
 
 1;
