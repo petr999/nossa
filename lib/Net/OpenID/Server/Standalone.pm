@@ -523,7 +523,7 @@ Subversion users use one of these:
 
 =head1 AUTHOR, LICENSE
 
-Peter Vereshagin <peter@vereshagin.org>, L<http://vereshagin.org>.
+Peter Vereshagin <peter@vereshagin.org> ( L<http://vereshagin.org> ).
 Based on stuff from:
 
   # Author: Alex Efros <powerman-asdf@yandex.ru>, 2008
