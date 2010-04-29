@@ -1,0 +1,41 @@
+OpenID for every perl user made easy
+
+Nossa makes almost any of your possessed hosting to be the location for your
+own OpenID Server in easy install-and-go way.
+
+Nossa is dedicated for fast installation of your own OpenID 'Server' on a
+CGI/FCGI::Spawn - enabled hosting. There is a lot of tweaks for common needs
+known as: your own identity source to be pluggable with Config.pm, your own
+design for user setup pages, location of your CGI::Session storage, your SRE
+information, redirect to your HTTPS server for setup, etc.
+
+Downloads and more info
+
+Web links
+
+http://gitweb.vereshagin.org/nossa browseable repository with snapshots
+http://code.google.com/p/nossa/ - home page with actual links, etc.
+http://code.google.com/p/nossa/downloads/list downloads from Google Code
+http://search.cpan.org/~veresc/Net-OpenID-Server-Standalone-0.1.1/Standalone.pm - actual documentation and CPAN download
+http://github.com/petr999/nossa - the Github page
+http://bugs.vereshagin.org/buglist.cgi - for bugs and reporting of them
+
+VCS downloads
+
+Git users use this:
+
+git clone git://github.com/petr999/nossa
+
+Subversion users use one of these:
+
+ svn checkout http://nossa.googlecode.com/svn/trunk/ nossa-read-only svn
+checkout http://svn.github.com/petr999/nossa.git
+
+AUTHOR, LICENSE
+
+Peter Vereshagin <peter@vereshagin.org>, http://vereshagin.org. Based on stuff
+from:
+
+   # Author: Alex Efros <powerman-asdf@yandex.ru>, 2008 License: Public Domain
+
+License: consider BSD is the closest to be of that domain.
