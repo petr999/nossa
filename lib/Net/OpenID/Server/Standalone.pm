@@ -442,19 +442,11 @@ For more custom-made setup you can inherit Nossa like this:
   my $dig = Digest::SHA256::new( 512 );
   
   # your own stylings around forms; override the print*Form methods for even more and/or inner styling
-<<<<<<< HEAD
-  our $htmlStyle = { start => "<html><body height='100%'><table width='100%' height='100%'"
-                             ."><tr><td height='100%' align='center' valign='middle'"
-                             .">'",
-                     end => "</td></tr>"
-                           ."</table></form></td></tr></table></body></html>",
-=======
   our $htmlStyle = { start  => "<html><body height='100%'><table width='100%' height='100%'"
                               ."><tr><td height='100%' align='center' valign='middle'"
                               .">",
                      end    => "</td></tr>"
                               ."</table></form></td></tr></table></body></html>",
->>>>>>> nossa
   };
   
   # the hash function
