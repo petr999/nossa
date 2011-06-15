@@ -215,23 +215,24 @@ redirectMessage returns the message for user.
 =cut
 
 sub redirect {
-  my( $self, $status, $location, ) = @_;
-  print $session->header( -status => $status, -location => $location, @_ );
+  my( $self, $status, $location, ) = (shift, shift, shift);
   if( substr( $status, 0, 3 ) eq '200' ){
+    print $session->header( -status => $status, @_ );
     print $location;
   } else {
+    print $session->header( -status => $status, -location => $location, @_ );
     print $self->redirectMessage( $status, $location, );
   }
 }
 sub redirectMessage {
   my( $status, $location, ) = @_;
   return <<EOF;
-$htmlStyle->{start}<h1
+$$htmlStyle{ 'start' }<h1
 >$status</h1
 ><p
 >The document is moved <a href='$location'>here.</a
 ></p><hr
-/>nossa &mdash; Net::OpenID::Server::Standalone.$htmlStyle->{ end }
+/>nossa &mdash; Net::OpenID::Server::Standalone.$$htmlStyle{ 'end' }
 EOF
 }
 
