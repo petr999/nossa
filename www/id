@@ -1,9 +1,8 @@
-#!/usr/bin/perl
-# Author: Alex Efros <powerman-asdf@yandex.ru>, 2008
-# License: Public Domain
+#!/usr/bin/env perl
 
 use warnings;
 use strict;
+
 our $nossaLibDir;
 
 BEGIN{
