@@ -22,21 +22,20 @@ setup script use this:
 
   Net::OpenID::Server::Standalone::setup;
 
-Some kind of L<Net::OpenID::Server::Standalone::Config> is a must. For more sophisticated use see L</USAGE> below.
-
+For more sophisticated use see below.
+     
 =head1 DESCRIPTION
 
 Nossa is dedicated for fast installation of your own OpenID 'Server' on a CGI/L<FCGI::Spawn> - enabled hosting. There is a lot of tweaks for common needs known as: your own identity source to be pluggable with Config.pm, your own design for user setup pages, location of your CGI::Session storage, your SRE information, redirect to your HTTPS server for setup, etc.
 
 Typical layout follows:
-
   ./ --- application root, e. g. $HOME on your hosting.
     lib/Net/OpenID/Server/Standalone/
       Config.pm --- configuration of your OpenID server,
                     created from sample Config.pm
     www/ or public_html/
       index.html or whatever to be your XRD document like it is at 
-      http://peter.vereshagin.org.
+      L<http://peter.vereshagin.org>.
     cgi/ or perl/ or cgi-bin/ or www/
       id.cgi    or id.pl    or id    --- id script
       setup.cgi or setup.pl or setup --- setup script
@@ -47,7 +46,7 @@ You may use your own MyApp.pm and MyApp/Config.pm ( see below ).
 
 =head1 PREREQUISITES
 
-Net::OpenID::Server, Data::UUID, MIME::Base64, HTML::Entities, Digest::MD5, CGI, CGI::Session.
+Net::OpenID::Server, Data::UUID, MIME::Base64; HTML::Entities; Digest::MD5, CGI, CGI::Session.
 
 =cut
 
@@ -74,7 +73,7 @@ my( $cgi, $session, );
 
 =over
 
-=item * C<$htmlStyle>
+=item * $htmlStyle
 
 hash reference for HTML code for your setup pages: the 'start' key holds a value for start of the page, and the 'end' key holds a value for trhe end.
 
@@ -176,7 +175,7 @@ sub id {
 
 =pod
 
-=item * setup()
+=item * setup
 
 shows forms for login, logout and for trust the requesting URL. For use in the 'setup' script.
 
@@ -215,24 +214,23 @@ redirectMessage returns the message for user.
 =cut
 
 sub redirect {
-  my( $self, $status, $location, ) = (shift, shift, shift);
+  my( $self, $status, $location, ) = @_;
+  print $session->header( -status => $status, -location => $location, @_ );
   if( substr( $status, 0, 3 ) eq '200' ){
-    print $session->header( -status => $status, @_ );
     print $location;
   } else {
-    print $session->header( -status => $status, -location => $location, @_ );
     print $self->redirectMessage( $status, $location, );
   }
 }
 sub redirectMessage {
   my( $status, $location, ) = @_;
   return <<EOF;
-$$htmlStyle{ 'start' }<h1
+$htmlStyle->{start}<h1
 >$status</h1
 ><p
 >The document is moved <a href='$location'>here.</a
 ></p><hr
-/>nossa &mdash; Net::OpenID::Server::Standalone.$$htmlStyle{ 'end' }
+/>nossa &mdash; Net::OpenID::Server::Standalone.$htmlStyle->{ end }
 EOF
 }
 
@@ -358,7 +356,7 @@ prints login form for setup script;
 sub printLoginForm {
   my $self = shift;
   my $idSvrUrl = $self->{ idSvrUrl };
-  my $hiddens = $self->cgiHiddens;
+  my $hiddens = &cgiHiddens;
   print <<EOF;
 $htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 >$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
@@ -382,7 +380,7 @@ sub printTrustForm {
   my $self = shift;
   my $trustRootHtmled = shift;
   my $idSvrUrl = $self->{ idSvrUrl };
-  my $hiddens = $self->cgiHiddens;
+  my $hiddens = &cgiHiddens;
   print <<EOF;
 $htmlStyle->{ start }<form action='$idSvrUrl' method='POST'
 >$$hiddens<table width='0' cellspacing='0' cellpadding='0' border='0'>
@@ -422,115 +420,6 @@ sub callHashFunction {
 =pod
 
 =back
-
-=head1 USAGE
-
-For 'do it quick' see the examples: index.html, id and setup. Also, L<Net::OpenID::Server::Standalone::Config> is an example about how you could set up your own ::Config. You should do it in any case.
-
-For more custom-made setup you can inherit Nossa like this:
-
-  $ cat lib/MyApp/Nossa.pm
-  package MyApp::Nossa;
-  
-  use strict;
-  use warnings;
-  
-  # inheritance stuff
-  use base qw/Net::OpenID::Server::Standalone/;
-  
-  # your own hash function initialization
-  use Digest::SHA256;
-  my $dig = Digest::SHA256::new( 512 );
-  
-  # your own stylings around forms; override the print*Form methods for even more and/or inner styling
-  our $htmlStyle = { start  => "<html><body height='100%'><table width='100%' height='100%'"
-                              ."><tr><td height='100%' align='center' valign='middle'"
-                              .">",
-                     end    => "</td></tr>"
-                              ."</table></form></td></tr></table></body></html>",
-  };
-  
-  # the hash function
-  sub hashFunction{
-    my $pass = shift;
-    $dig->hexhash( $pass );
-  }
-
-  1;
-
-  $ cat lib/MyApp/Nossa/Config.pm
-  package MyApp::Nossa::Config;
-
-  use strict;
-  use warnings;
-  
-  use base qw/Net::OpenID::Server::Standalone::Config/;
-  
-  our $config = {
-    # set up your values here as described in L<Net::OpenID::Server::Standalone::Config>
-  };
-
-  1;
-
-for different storage methods, you may want to set up your own get() in your Config package. You shouldn't need to 'use base N:O:S:Sa::Config' in such a case.
-
-  $ cat id
-  #!/usr/bin/perl
-  
-  use warnings;
-  use strict;
-  our $nossaLibDir;
-  
-  BEGIN{
-    use File::Basename qw/dirname/;
-    use Cwd qw/realpath/;
-    $nossaLibDir = realpath( dirname( __FILE__ ).'/../lib' );
-    push( @INC, $nossaLibDir  )
-      unless grep { $_ eq $nossaLibDir } @INC;
-  }
-  
-  use MyApp::Nossa;
-  
-  MyApp::Nossa->id;
-
-Same goes here for setup script except 
-
-  MyApp::Nossa->setup;
-
-is the last line.
-
-=head1 Downloads and more info
-
-=head2 Web links
-
-L<http://gitweb.vereshagin.org/nossa> - browseable repository with snapshots
-
-L<http://code.google.com/p/nossa/> - home page with actual links, etc.
-
-L<http://github.com/petr999/nossa> - GitHub page
-
-L<http://bugs.vereshagin.org/buglist.cgi?product=Nossa> for bugs and reporting of them
-
-=head2 VCS downloads
-
-Git users use this:
-
-  git clone git://github.com/petr999/nossa
-
-Subversion users use one of these:
-
-  svn checkout http://nossa.googlecode.com/svn/trunk/ nossa-read-only
-  svn checkout http://svn.github.com/petr999/nossa.git
-
-=head1 AUTHOR, LICENSE
-
-Peter Vereshagin <peter@vereshagin.org> ( L<http://vereshagin.org> ).
-Based on stuff from:
-
-  # Author: Alex Efros <powerman-asdf@yandex.ru>, 2008
-  # License: Public Domain
-
-License: consider BSD is the closest to be of that domain.
 
 =cut
 

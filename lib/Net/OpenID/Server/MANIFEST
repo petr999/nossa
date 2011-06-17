@@ -1,0 +1,6 @@
+Makefile.PL
+MANIFEST
+COPYING
+README
+Standalone.pm
+Standalone/Config.pm
